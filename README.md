@@ -132,8 +132,6 @@ Select option: _
 
 ## 🔧 System Requirements
 
-## 🔧 System Requirements
-
 ### Minimum Requirements
 - 📱 **Android** 7.0+ (API 24+)
 - 💾 **Storage**: 500MB free space
