@@ -13,6 +13,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Check if running in Termux
 if [ ! -d "/data/data/com.termux" ]; then
     echo -e "${RED}Error: This script must be run in Termux${NC}"
@@ -28,6 +31,13 @@ fi
 
 echo -e "${GREEN}Detected Termux proot-distro Ubuntu environment${NC}"
 
+# Development mode flag
+DEV_MODE=false
+if [[ "$1" == "--dev" ]]; then
+    DEV_MODE=true
+    echo -e "${YELLOW}Running in development mode${NC}"
+fi
+
 # Update package list
 echo -e "\n${YELLOW}Updating package list...${NC}"
 apt update
@@ -38,6 +48,7 @@ apt install -y \
     python3 \
     python3-pip \
     python3-dev \
+    python3-venv \
     build-essential \
     libffi-dev \
     libssl-dev \
@@ -46,25 +57,6 @@ apt install -y \
     sqlite3 \
     htop
 
-# Install Python packages
-echo -e "\n${YELLOW}Installing Python packages...${NC}"
-pip3 install --upgrade pip
-
-# Core packages
-pip3 install \
-    psutil \
-    requests \
-    pyyaml \
-    python-dateutil
-
-# Data analysis packages
-pip3 install \
-    pandas \
-    numpy \
-    matplotlib \
-    seaborn \
-    tabulate
-
 # Create directories
 echo -e "\n${YELLOW}Creating directory structure...${NC}"
 MONITOR_HOME="/data/data/com.termux/files/home/android_monitor"
@@ -72,49 +64,80 @@ mkdir -p "$MONITOR_HOME"
 mkdir -p "$MONITOR_HOME/logs"
 mkdir -p "$MONITOR_HOME/exports"
 mkdir -p "$MONITOR_HOME/configs"
+mkdir -p "$MONITOR_HOME/bin"
 
-# Download monitor scripts
+# Create virtual environment (optional but recommended)
+if [ "$DEV_MODE" = true ]; then
+    echo -e "\n${YELLOW}Creating virtual environment...${NC}"
+    python3 -m venv "$MONITOR_HOME/venv"
+    source "$MONITOR_HOME/venv/bin/activate"
+fi
+
+# Install Python packages
+echo -e "\n${YELLOW}Installing Python packages...${NC}"
+pip3 install --upgrade pip
+
+# Install from requirements.txt if it exists
+if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+    pip3 install -r "$SCRIPT_DIR/requirements.txt"
+else
+    # Install packages individually
+    pip3 install \
+        psutil \
+        requests \
+        pyyaml \
+        python-dateutil \
+        pandas \
+        numpy \
+        matplotlib \
+        seaborn \
+        tabulate
+fi
+
+# Install development requirements if in dev mode
+if [ "$DEV_MODE" = true ] && [ -f "$SCRIPT_DIR/requirements-dev.txt" ]; then
+    pip3 install -r "$SCRIPT_DIR/requirements-dev.txt"
+fi
+
+# Copy monitor scripts
 echo -e "\n${YELLOW}Installing monitor scripts...${NC}"
 
-# Create script directory
-SCRIPT_DIR="/data/data/com.termux/files/home/android_monitor/bin"
-mkdir -p "$SCRIPT_DIR"
+# Copy Python scripts from src directory
+if [ -d "$SCRIPT_DIR/src" ]; then
+    cp "$SCRIPT_DIR/src/android-monitor.py" "$MONITOR_HOME/bin/"
+    cp "$SCRIPT_DIR/src/android-query.py" "$MONITOR_HOME/bin/"
+    cp "$SCRIPT_DIR/src/android-dashboard.py" "$MONITOR_HOME/bin/"
+else
+    echo -e "${RED}Warning: src directory not found. Scripts will need to be manually installed.${NC}"
+fi
 
-# Copy the main scripts (in real deployment, these would be downloaded)
-cat > "$SCRIPT_DIR/android-monitor.py" << 'EOF'
-# Main monitor script would be inserted here
-# For now, create a placeholder
-#!/usr/bin/env python3
-print("Main monitor script - replace with actual content")
-EOF
-
-cat > "$SCRIPT_DIR/android-query.py" << 'EOF'
-# Query tool script would be inserted here
-#!/usr/bin/env python3
-print("Query tool script - replace with actual content")
-EOF
-
-cat > "$SCRIPT_DIR/android-dashboard.py" << 'EOF'
-# Dashboard script would be inserted here
-#!/usr/bin/env python3
-print("Dashboard script - replace with actual content")
-EOF
+# Copy utility scripts
+if [ -d "$SCRIPT_DIR/utils" ]; then
+    cp "$SCRIPT_DIR/utils/android-monitor-utils.py" "$MONITOR_HOME/bin/"
+fi
 
 # Make scripts executable
-chmod +x "$SCRIPT_DIR"/*.py
+chmod +x "$MONITOR_HOME/bin"/*.py
 
-# Create default configuration
-echo -e "\n${YELLOW}Creating default configuration...${NC}"
-cat > "$MONITOR_HOME/configs/default.yaml" << 'EOF'
-# Android Monitor Configuration
-# Default configuration with all modules enabled
+# Copy configuration files
+echo -e "\n${YELLOW}Installing configuration files...${NC}"
 
-# General settings
+if [ -d "$SCRIPT_DIR/configs" ]; then
+    # Copy all yaml files from configs directory
+    for config in "$SCRIPT_DIR/configs"/*.yaml; do
+        if [ -f "$config" ]; then
+            cp "$config" "$MONITOR_HOME/configs/"
+        fi
+    done
+else
+    echo -e "${YELLOW}Creating default configurations...${NC}"
+    # Create configurations inline (fallback)
+    cat > "$MONITOR_HOME/configs/default.yaml" << 'EOF'
+# Default configuration
 output_dir: /data/data/com.termux/files/home/android_monitor
 db_path: monitor_data.db
 log_level: INFO
 
-# Module toggles
 enable_logcat: true
 enable_network: true
 enable_process: true
@@ -124,121 +147,19 @@ enable_filesystem: true
 enable_sensors: true
 enable_apps: true
 
-# Logcat settings
 logcat_buffer_size: 1000
-logcat_filters: []
-logcat_priority: V  # V=Verbose, D=Debug, I=Info, W=Warning, E=Error
-
-# Network settings
 network_interval: 5
-network_capture_packets: false
-network_interfaces: []  # Empty = all interfaces
-
-# Process settings
 process_interval: 10
-process_top_n: 20
-process_track_threads: true
-
-# Memory settings
 memory_interval: 30
-memory_detailed: true
-
-# Battery settings
 battery_interval: 60
-battery_track_apps: true
-
-# Filesystem settings
-fs_watch_paths:
-  - /data/data/com.termux/files/home
-  - /sdcard/Download
-  - /sdcard/DCIM
 fs_interval: 5
-fs_recursive: true
 
-# Alert thresholds
 alert_cpu_threshold: 80.0
 alert_memory_threshold: 85.0
 alert_battery_threshold: 20.0
-alert_network_threshold: 100.0  # MB/s
+alert_network_threshold: 100.0
 EOF
-
-# Create minimal configuration
-cat > "$MONITOR_HOME/configs/minimal.yaml" << 'EOF'
-# Minimal configuration for low resource usage
-output_dir: /data/data/com.termux/files/home/android_monitor
-db_path: monitor_data.db
-log_level: WARNING
-
-enable_logcat: false
-enable_network: true
-enable_process: true
-enable_memory: true
-enable_battery: true
-enable_filesystem: false
-enable_sensors: false
-enable_apps: false
-
-network_interval: 30
-process_interval: 30
-process_top_n: 10
-memory_interval: 60
-battery_interval: 120
-EOF
-
-# Create performance monitoring configuration
-cat > "$MONITOR_HOME/configs/performance.yaml" << 'EOF'
-# Configuration focused on performance monitoring
-output_dir: /data/data/com.termux/files/home/android_monitor
-db_path: monitor_data.db
-log_level: INFO
-
-enable_logcat: false
-enable_network: true
-enable_process: true
-enable_memory: true
-enable_battery: false
-enable_filesystem: false
-enable_sensors: false
-enable_apps: true
-
-process_interval: 5
-process_top_n: 50
-process_track_threads: true
-memory_interval: 10
-memory_detailed: true
-network_interval: 5
-alert_cpu_threshold: 70.0
-alert_memory_threshold: 80.0
-EOF
-
-# Create security monitoring configuration
-cat > "$MONITOR_HOME/configs/security.yaml" << 'EOF'
-# Configuration focused on security monitoring
-output_dir: /data/data/com.termux/files/home/android_monitor
-db_path: monitor_data.db
-log_level: DEBUG
-
-enable_logcat: true
-enable_network: true
-enable_process: true
-enable_memory: false
-enable_battery: false
-enable_filesystem: true
-enable_sensors: false
-enable_apps: true
-
-logcat_filters:
-  - "AuthService:*"
-  - "PackageManager:*"
-  - "ActivityManager:*"
-  - "SecurityLog:*"
-
-network_capture_packets: true
-fs_recursive: true
-fs_watch_paths:
-  - /data/data/com.termux/files/home
-  - /sdcard
-EOF
+fi
 
 # Create convenience scripts
 echo -e "\n${YELLOW}Creating convenience scripts...${NC}"
@@ -248,10 +169,12 @@ cat > "$MONITOR_HOME/start-monitor.sh" << 'EOF'
 #!/bin/bash
 # Start Android Monitor
 
-SCRIPT_DIR="/data/data/com.termux/files/home/android_monitor/bin"
-CONFIG_FILE="${1:-/data/data/com.termux/files/home/android_monitor/configs/default.yaml}"
+MONITOR_HOME="/data/data/com.termux/files/home/android_monitor"
+SCRIPT_DIR="$MONITOR_HOME/bin"
+CONFIG_FILE="${1:-$MONITOR_HOME/configs/default.yaml}"
 
 echo "Starting Android Monitor with config: $CONFIG_FILE"
+cd "$MONITOR_HOME"
 python3 "$SCRIPT_DIR/android-monitor.py" -c "$CONFIG_FILE"
 EOF
 chmod +x "$MONITOR_HOME/start-monitor.sh"
@@ -261,8 +184,9 @@ cat > "$MONITOR_HOME/start-dashboard.sh" << 'EOF'
 #!/bin/bash
 # Start Android Monitor Dashboard
 
-SCRIPT_DIR="/data/data/com.termux/files/home/android_monitor/bin"
-DB_PATH="${1:-/data/data/com.termux/files/home/android_monitor/monitor_data.db}"
+MONITOR_HOME="/data/data/com.termux/files/home/android_monitor"
+SCRIPT_DIR="$MONITOR_HOME/bin"
+DB_PATH="${1:-$MONITOR_HOME/monitor_data.db}"
 
 if [ ! -f "$DB_PATH" ]; then
     echo "Database not found. Start monitor first or use live mode:"
@@ -270,6 +194,7 @@ if [ ! -f "$DB_PATH" ]; then
     exit 1
 fi
 
+cd "$MONITOR_HOME"
 python3 "$SCRIPT_DIR/android-dashboard.py" -d "$DB_PATH"
 EOF
 chmod +x "$MONITOR_HOME/start-dashboard.sh"
@@ -279,19 +204,21 @@ cat > "$MONITOR_HOME/query-data.sh" << 'EOF'
 #!/bin/bash
 # Query Android Monitor Data
 
-SCRIPT_DIR="/data/data/com.termux/files/home/android_monitor/bin"
-DB_PATH="/data/data/com.termux/files/home/android_monitor/monitor_data.db"
+MONITOR_HOME="/data/data/com.termux/files/home/android_monitor"
+SCRIPT_DIR="$MONITOR_HOME/bin"
+DB_PATH="$MONITOR_HOME/monitor_data.db"
 
 if [ ! -f "$DB_PATH" ]; then
     echo "Database not found. Start monitor first."
     exit 1
 fi
 
+cd "$MONITOR_HOME"
 python3 "$SCRIPT_DIR/android-query.py" "$DB_PATH" "$@"
 EOF
 chmod +x "$MONITOR_HOME/query-data.sh"
 
-# Create systemd-style service script (for persistent monitoring)
+# Create systemd-style service script
 cat > "$MONITOR_HOME/monitor-service.sh" << 'EOF'
 #!/bin/bash
 # Android Monitor Service Script
@@ -334,6 +261,7 @@ status() {
             echo "Monitor running (PID: $PID)"
         else
             echo "Monitor not running (stale PID file)"
+            rm -f "$PIDFILE"
         fi
     else
         echo "Monitor not running"
@@ -376,7 +304,7 @@ echo "Cleaning up data older than $DAYS_TO_KEEP days..."
 
 if [ -f "$DB_PATH" ]; then
     # Calculate timestamp
-    CUTOFF_TIMESTAMP=$(date -d "$DAYS_TO_KEEP days ago" +%s)
+    CUTOFF_TIMESTAMP=$(date -d "$DAYS_TO_KEEP days ago" +%s 2>/dev/null || date -v -${DAYS_TO_KEEP}d +%s)
     
     # Clean each table
     sqlite3 "$DB_PATH" << SQL
@@ -397,27 +325,13 @@ else
 fi
 
 # Clean old logs
-find "$MONITOR_HOME/logs" -name "*.log" -mtime +$DAYS_TO_KEEP -delete
+find "$MONITOR_HOME/logs" -name "*.log" -mtime +$DAYS_TO_KEEP -delete 2>/dev/null || \
+find "$MONITOR_HOME/logs" -name "*.log" -exec rm {} \;
 echo "Old logs cleaned"
 EOF
 chmod +x "$MONITOR_HOME/cleanup.sh"
 
-# Create cron job example
-cat > "$MONITOR_HOME/crontab.example" << 'EOF'
-# Example crontab entries for Android Monitor
-# Add these to your crontab with: crontab -e
-
-# Start monitor on boot
-@reboot /data/data/com.termux/files/home/android_monitor/monitor-service.sh start
-
-# Cleanup old data daily at 3 AM
-0 3 * * * /data/data/com.termux/files/home/android_monitor/cleanup.sh 7
-
-# Generate daily report at 8 AM
-0 8 * * * /data/data/com.termux/files/home/android_monitor/query-data.sh --export html --output /sdcard/android-monitor-report-$(date +\%Y\%m\%d).html
-EOF
-
-# Set up Termux permissions
+# Set up Termux permissions and boot script
 echo -e "\n${YELLOW}Setting up Termux permissions...${NC}"
 
 # Create Termux boot script
@@ -438,7 +352,10 @@ chmod +x "$TERMUX_BOOT_DIR/start-android-monitor.sh"
 
 # Create aliases
 echo -e "\n${YELLOW}Creating aliases...${NC}"
-cat >> ~/.bashrc << 'EOF'
+
+BASHRC_FILE="$HOME/.bashrc"
+if ! grep -q "Android Monitor aliases" "$BASHRC_FILE" 2>/dev/null; then
+    cat >> "$BASHRC_FILE" << 'EOF'
 
 # Android Monitor aliases
 alias am-start='/data/data/com.termux/files/home/android_monitor/start-monitor.sh'
@@ -447,7 +364,10 @@ alias am-status='/data/data/com.termux/files/home/android_monitor/monitor-servic
 alias am-dash='/data/data/com.termux/files/home/android_monitor/start-dashboard.sh'
 alias am-query='/data/data/com.termux/files/home/android_monitor/query-data.sh'
 alias am-live='python3 /data/data/com.termux/files/home/android_monitor/bin/android-dashboard.py --live'
+alias am-cleanup='/data/data/com.termux/files/home/android_monitor/cleanup.sh'
+alias am-utils='python3 /data/data/com.termux/files/home/android_monitor/bin/android-monitor-utils.py'
 EOF
+fi
 
 # Test installation
 echo -e "\n${YELLOW}Testing installation...${NC}"
@@ -467,6 +387,19 @@ print('All Python packages imported successfully')
 # Test script permissions
 [ -x "$MONITOR_HOME/start-monitor.sh" ] && echo -e "${GREEN}✓ Scripts executable OK${NC}" || echo -e "${RED}✗ Scripts not executable${NC}"
 
+# Test script existence
+if [ -f "$MONITOR_HOME/bin/android-monitor.py" ]; then
+    echo -e "${GREEN}✓ Monitor script installed${NC}"
+else
+    echo -e "${RED}✗ Monitor script missing - check src directory${NC}"
+fi
+
+# Run diagnostics
+echo -e "\n${YELLOW}Running system diagnostics...${NC}"
+if [ -f "$MONITOR_HOME/bin/android-monitor-utils.py" ]; then
+    python3 "$MONITOR_HOME/bin/android-monitor-utils.py" diagnose --check-deps || true
+fi
+
 # Final instructions
 echo -e "\n${GREEN}=================================="
 echo "Installation Complete!"
@@ -478,14 +411,30 @@ echo "2. View dashboard:      am-dash"
 echo "3. Query data:          am-query -i"
 echo "4. Live monitoring:     am-live"
 echo "5. Stop monitoring:     am-stop"
+echo "6. Check status:        am-status"
 echo
 echo "Configuration files in: $MONITOR_HOME/configs/"
+echo "  - default.yaml: All modules enabled"
+echo "  - minimal.yaml: Low resource usage"
+echo "  - performance.yaml: CPU/memory focus"
+echo "  - security.yaml: Security monitoring"
+echo
 echo "Logs will be in:       $MONITOR_HOME/logs/"
 echo "Database will be in:   $MONITOR_HOME/monitor_data.db"
 echo
-echo -e "${YELLOW}Note: Replace the placeholder scripts in $SCRIPT_DIR with the actual monitoring scripts${NC}"
+if [ ! -f "$MONITOR_HOME/bin/android-monitor.py" ]; then
+    echo -e "${YELLOW}Note: Monitor scripts were not found in src directory.${NC}"
+    echo "Please manually copy the scripts from:"
+    echo "  src/android-monitor.py    -> $MONITOR_HOME/bin/"
+    echo "  src/android-query.py      -> $MONITOR_HOME/bin/"
+    echo "  src/android-dashboard.py  -> $MONITOR_HOME/bin/"
+    echo "  utils/android-monitor-utils.py -> $MONITOR_HOME/bin/"
+fi
 echo
-echo "For auto-start on boot, install Termux:Boot app and run:"
-echo "  termux-wake-lock"
+echo "For auto-start on boot, install Termux:Boot app"
 echo
 echo "To reload aliases, run: source ~/.bashrc"
+echo
+echo "For help and documentation, see:"
+echo "  $SCRIPT_DIR/README.md"
+echo "  $SCRIPT_DIR/docs/"
