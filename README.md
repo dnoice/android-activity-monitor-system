@@ -210,9 +210,6 @@ android-activity-monitor-system/
     ├── 📖 MODULES.md            # Module documentation
     └── 📖 CONTRIBUTING.md       # Contribution guidelines
 ```
-
-## Quick Start
-
 ## 🚀 Quick Start
 
 ### Basic Commands
