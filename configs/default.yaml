@@ -1,0 +1,183 @@
+# configs/default.yaml
+# Default configuration with all modules enabled
+
+# General settings
+output_dir: /data/data/com.termux/files/home/android_monitor
+db_path: monitor_data.db
+log_level: INFO
+
+# Module toggles
+enable_logcat: true
+enable_network: true
+enable_process: true
+enable_memory: true
+enable_battery: true
+enable_filesystem: true
+enable_sensors: true
+enable_apps: true
+
+# Logcat settings
+logcat_buffer_size: 1000
+logcat_filters: []
+logcat_priority: V  # V=Verbose, D=Debug, I=Info, W=Warning, E=Error
+
+# Network settings
+network_interval: 5
+network_capture_packets: false
+network_interfaces: []  # Empty = all interfaces
+
+# Process settings
+process_interval: 10
+process_top_n: 20
+process_track_threads: true
+
+# Memory settings
+memory_interval: 30
+memory_detailed: true
+
+# Battery settings
+battery_interval: 60
+battery_track_apps: true
+
+# Filesystem settings
+fs_watch_paths:
+  - /data/data/com.termux/files/home
+  - /sdcard/Download
+  - /sdcard/DCIM
+fs_interval: 5
+fs_recursive: true
+
+# Alert thresholds
+alert_cpu_threshold: 80.0
+alert_memory_threshold: 85.0
+alert_battery_threshold: 20.0
+alert_network_threshold: 100.0  # MB/s
+
+# Alert actions (optional)
+alert_actions:
+  high_cpu:
+    threshold: 90
+    command: "termux-notification -t 'High CPU Alert' -c 'CPU usage exceeded 90%'"
+  low_battery:
+    threshold: 15
+    command: "termux-notification -t 'Low Battery' -c 'Battery at 15%'"
+
+---
+# configs/minimal.yaml
+# Minimal configuration for low resource usage
+
+output_dir: /data/data/com.termux/files/home/android_monitor
+db_path: monitor_data.db
+log_level: WARNING
+
+# Disable non-essential modules
+enable_logcat: false
+enable_network: true
+enable_process: true
+enable_memory: true
+enable_battery: true
+enable_filesystem: false
+enable_sensors: false
+enable_apps: false
+
+# Increased intervals for lower resource usage
+network_interval: 30
+process_interval: 30
+process_top_n: 10
+process_track_threads: false
+memory_interval: 60
+memory_detailed: false
+battery_interval: 120
+
+# Higher thresholds to reduce alerts
+alert_cpu_threshold: 90.0
+alert_memory_threshold: 90.0
+alert_battery_threshold: 15.0
+alert_network_threshold: 200.0
+
+---
+# configs/performance.yaml
+# Configuration focused on performance monitoring
+
+output_dir: /data/data/com.termux/files/home/android_monitor
+db_path: monitor_data.db
+log_level: INFO
+
+# Focus on performance-related modules
+enable_logcat: false
+enable_network: true
+enable_process: true
+enable_memory: true
+enable_battery: false
+enable_filesystem: false
+enable_sensors: false
+enable_apps: true
+
+# Aggressive monitoring intervals
+process_interval: 5
+process_top_n: 50
+process_track_threads: true
+memory_interval: 10
+memory_detailed: true
+network_interval: 5
+
+# Lower thresholds for early warning
+alert_cpu_threshold: 70.0
+alert_memory_threshold: 80.0
+
+# App monitoring for performance impact
+logcat_filters:
+  - "ActivityManager:I"
+  - "WindowManager:W"
+
+---
+# configs/security.yaml
+# Configuration focused on security monitoring
+
+output_dir: /data/data/com.termux/files/home/android_monitor
+db_path: monitor_data.db
+log_level: DEBUG
+
+# Enable security-relevant modules
+enable_logcat: true
+enable_network: true
+enable_process: true
+enable_memory: false
+enable_battery: false
+enable_filesystem: true
+enable_sensors: false
+enable_apps: true
+
+# Security-focused logcat filters
+logcat_filters:
+  - "AuthService:*"
+  - "PackageManager:*"
+  - "ActivityManager:*"
+  - "SecurityLog:*"
+  - "SELinux:*"
+  - "PermissionManager:*"
+
+# Network security monitoring
+network_capture_packets: true
+network_interval: 10
+
+# File system monitoring for sensitive paths
+fs_recursive: true
+fs_interval: 5
+fs_watch_paths:
+  - /data/data/com.termux/files/home
+  - /sdcard
+  - /sdcard/Download
+  - /data/data/com.termux/files/home/.ssh
+  - /data/data/com.termux/files/usr/etc
+
+# Process monitoring for suspicious activity
+process_interval: 15
+process_top_n: 30
+
+# Security alerts
+alert_actions:
+  suspicious_network:
+    command: "termux-notification -t 'Security Alert' -c 'Suspicious network activity detected' --priority high"
+  filesystem_change:
+    command: "termux-notification -t 'File System Alert' -c 'Sensitive file modified'"
