@@ -1,4 +1,3 @@
-# docs/API.md
 # Android Monitor API Documentation
 
 ## Overview
